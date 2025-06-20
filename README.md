@@ -4,6 +4,10 @@ A command line utility to download songs, podcasts, playlists and albums directl
 
 You need a Spotify Premium account.
 
+## Disclaimer
+
+The usage of this software may infringe Spotify's ToS and/or your local legislation. For educational purposes only. Do not run in production servers.
+
 ## Installation
 
 You can install it using `cargo`, `homebrew` or from source.
@@ -57,10 +61,6 @@ ARGS:
 ```
 
 Songs, playlists and albums must be passed as Spotify URIs or URLs (e.g. `spotify:track:123456789abcdefghABCDEF` for songs and `spotify:playlist:123456789abcdefghABCDEF` for playlists or `https://open.spotify.com/playlist/123456789abcdefghABCDEF?si=1234567890`).
-
-## Disclaimer
-
-The usage of this software may infringe Spotify's ToS and/or your local legislation. Use it under your own risk.
 
 ## License
 
