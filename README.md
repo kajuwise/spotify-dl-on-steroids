@@ -35,7 +35,9 @@ OPTIONAL:
                                        8 (slowest, most compression). A value larger than 8 will be Treated as 8.
                                        Default is 4.
     -d, --destination <destination>    The directory where the songs will be downloaded
-    -t, --parallel <parallel>          Number of parallel downloads. Default is 5. [default: 5]
+    -t, --turbo <parallel>             Turbo mode downloads songs in parallel. The number behind option defines the number of parallel threads: '-t 5' would download five songs
+                                       simultaneously.
+                                       In normal mode, the download speed is limited to mimic realistic streaming and there is varying delay between downloads.
 
 OPTIONAL ARGS:
     <tracks>...    A list of Spotify URIs or URLs (songs, podcasts, playlists or albums). Automatically prompted if not provided.
