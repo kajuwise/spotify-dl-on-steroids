@@ -32,18 +32,16 @@ pub struct Downloader {
 #[derive(Debug, Clone)]
 pub struct DownloadOptions {
     pub destination: PathBuf,
-    pub compression: Option<u32>,
     pub turbo: usize,
     pub format: Format,
 }
 
 impl DownloadOptions {
-    pub fn new(destination: Option<String>, compression: Option<u32>, turbo: usize, format: Format) -> Self {
+    pub fn new(destination: Option<String>, turbo: usize, format: Format) -> Self {
         let destination =
             destination.map_or_else(|| std::env::current_dir().unwrap(), PathBuf::from);
         DownloadOptions {
             destination,
-            compression,
             turbo,
             format
         }
