@@ -72,10 +72,11 @@ impl Downloader {
     async fn download_track(&self, track: Track, options: &DownloadOptions) -> Result<()> {
         let metadata = track.metadata(&self.session).await?;
         tracing::info!("Downloading track: {:?}", metadata.track_name);
+        let file_stem = metadata.to_string();
 
         let path = options
             .destination
-            .join(metadata.to_string())
+            .join(&file_stem)
             .with_extension(options.format.extension())
             .to_str()
             .ok_or(anyhow::anyhow!("Could not set the output path"))?
@@ -108,16 +109,16 @@ impl Downloader {
             }
         };
 
-        tracing::info!("Encoding track: {}", metadata.to_string());
-        pb.set_message(format!("Encoding {}", metadata.to_string()));
+        tracing::info!("Encoding track: {}", file_stem);
+        pb.set_message(format!("Encoding {}", file_stem));
 
         let encoder = crate::encoder::get_encoder(options.format);
         let stream = encoder.encode(samples).await?;
 
-        pb.set_message(format!("Writing {}", metadata.to_string()));
+        pb.set_message(format!("Writing {}", file_stem));
         tracing::info!(
             "Writing track: {:?} to file: {}",
-            metadata.to_string(),
+            file_stem,
             &path
         );
         stream.write_to_file(&path).await?;
@@ -125,7 +126,18 @@ impl Downloader {
         let tags = metadata.tags().await?;
         encoder::tags::store_tags(path, &tags, options.format).await?;
 
-        pb.finish_with_message(format!("Downloaded {}", metadata.to_string()));
+        if options.parallel == 1 {
+            let delay_before_next_download = (metadata.duration.max(0) as u64) / 5;
+            pb.set_message(format!(
+                "Downloaded {}. Delaying next song by {}s",
+                file_stem,
+                delay_before_next_download / 1000
+            ));
+            tokio::time::sleep(Duration::from_millis(delay_before_next_download)).await;
+            pb.finish_with_message(format!("Completed {}", file_stem));
+        } else {
+            pb.finish_with_message(format!("Downloaded {}", file_stem));
+        }
         Ok(())
     }
 
@@ -192,6 +204,7 @@ impl Downloader {
             samples,
             ..Default::default()
         })
+    
     }
 
     fn fail_with_error<S>(&self, pb: &ProgressBar, name: &str, e: S)

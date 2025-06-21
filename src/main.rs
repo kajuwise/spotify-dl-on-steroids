@@ -24,16 +24,17 @@ struct Opt {
     destination: Option<String>,
     #[structopt(
         short = "t",
-        long = "parallel",
-        help = "Number of parallel downloads. Default is 5.",
-        default_value = "5"
+        long = "turbo",
+        alias = "parallel",
+        help = "Turbo mode downloads songs in parallel (e.g. '-t 5' downloads five songs simultaneously).\nIn normal mode the download speed mimics Spotify streaming with delays between songs.",
+        default_value = "1"
     )]
     parallel: usize,
     #[structopt(
         short = "f",
         long = "format",
-        help = "The format to download the tracks in. Default is flac.",
-        default_value = "flac"
+        help = "The format to download the tracks in. Default is mp3 (320kbps).",
+        default_value = "mp3"
     )]
     format: Format,
     #[structopt(
