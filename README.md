@@ -1,7 +1,6 @@
 # spotify-dl
 
 A command line utility to download songs, podcasts, playlists and albums directly from Spotify's servers.
-
 You need a Spotify Premium account.
 
 ## Disclaimer
@@ -31,13 +30,14 @@ FLAGS:
 
 OPTIONAL:
     -f, --format <mp3 or flac>         Defining the output format, 320kbps mp3 by default
-    -c, --compression <compression>    Setting the flac compression level from 0 (fastest, least compression) to
-                                       8 (slowest, most compression). A value larger than 8 will be Treated as 8.
-                                       Default is 4.
     -d, --destination <destination>    The directory where the songs will be downloaded
-    -t, --turbo <parallel>             Turbo mode downloads songs in parallel. The number behind option defines the number of parallel threads: '-t 5' would download five songs
-                                       simultaneously.
-                                       In normal mode, the download speed is limited to mimic realistic streaming and there is varying delay between downloads.
+    -t, --turbo <parallel>             Turbo mode downloads songs in parallel. The number behind option
+                                       defines the number of parallel threads: '-t 5' would download
+                                       five songs simultaneously.
+                                       In normal mode, the download speed is limited to mimic
+                                       realistic streaming and there is varying delay between downloads.
+    -r, --reset <reset>                Reset last-run-cache. Normally last run can be resumed without
+                                       specifying the track again. (playlist sync mode) 
 
 OPTIONAL ARGS:
     <tracks>...    A list of Spotify URIs or URLs (songs, podcasts, playlists or albums). Automatically prompted if not provided.
