@@ -33,18 +33,18 @@ pub struct Downloader {
 pub struct DownloadOptions {
     pub destination: PathBuf,
     pub compression: Option<u32>,
-    pub parallel: usize,
+    pub turbo: usize,
     pub format: Format,
 }
 
 impl DownloadOptions {
-    pub fn new(destination: Option<String>, compression: Option<u32>, parallel: usize, format: Format) -> Self {
+    pub fn new(destination: Option<String>, compression: Option<u32>, turbo: usize, format: Format) -> Self {
         let destination =
             destination.map_or_else(|| std::env::current_dir().unwrap(), PathBuf::from);
         DownloadOptions {
             destination,
             compression,
-            parallel,
+            turbo,
             format
         }
     }
@@ -68,7 +68,7 @@ impl Downloader {
             .map(|track| {
                 self.download_track(track, options)
             })
-            .buffer_unordered(options.parallel)
+            .buffer_unordered(options.turbo)
             .try_collect::<Vec<_>>()
             .await?;
 
@@ -146,7 +146,13 @@ impl Downloader {
 
         encoder.encode(&samples, &metadata, cover_image, output_path).await?;
 
-        pb.finish_with_message(format!("Downloaded {}", &file_name));
+        if options.turbo == 1 {
+            let delay_before_next_download = (track.metadata(&self.session).await?.duration / 5) as u64;
+            pb.set_message(format!("Downloaded {}. Delaying next song by {}s", &file_name, delay_before_next_download/1000));
+            tokio::time::sleep(Duration::from_millis(delay_before_next_download)).await;
+            pb.finish_with_message(format!("Completed {}", &file_name));
+        }
+
         Ok(())
     }
 

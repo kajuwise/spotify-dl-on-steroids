@@ -33,15 +33,16 @@ struct Opt {
     compression: Option<u32>,
     #[structopt(
         short = "t",
-        long = "parallel",
-        help = "Number of parallel downloads. Default is 5.",
-        default_value = "5"
+        long = "turbo",
+        help = "Turbo mode downloads songs in parallel. '-t 5' would download five songs simultaneously.\n
+        In normal mode, the download speed is limited to mimic realistic streaming and there is varying delay between downloads.",
+        default_value = "1"
     )]
     parallel: usize,
     #[structopt(
         short = "f",
         long = "format",
-        help = "The format to download the tracks in. Default is mp3.",
+        help = "The format to download the tracks in. Default is mp3. (320kbps, max 20kHz equal to top Spotify quality)",
         default_value = "mp3"
     )]
     format: Format
