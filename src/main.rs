@@ -104,15 +104,28 @@ fn store_last_run_cache(opt: &mut Opt, last_run_cache_path: &str) -> Result<(), 
     Ok(())
 }
 
-fn use_last_run_cache_if_applicable(opt: &mut Opt, last_run_cache_path: &str) -> Result<(), Error> {
+fn use_last_run_cache_if_applicable(opt: &mut Opt, last_run_cache_path: &str) -> Result<(), std::io::Error> {
     if opt.tracks.is_empty() && !opt.reset {
-        let data = fs::read_to_string(last_run_cache_path)?;
-        if !data.is_empty() {
-            print!("Tracks not provided.\nFound last run cache. Will run in folder sync-mode with same tracks as last time: ");
-            let last_run_cache: LastRunCache = serde_json::from_str(&data)?;
-            println!("{}", last_run_cache.url.join(", "));
-            println!("(Tip: Run with flag -r to clear folder sync-mode state or specify a different track via command argument.)\n");
-            opt.tracks.extend(last_run_cache.url);
+        match fs::read_to_string(last_run_cache_path) {
+            Ok(data) => {
+                if !data.trim().is_empty() {
+                    println!("Tracks not provided.");
+                    println!("Found last run cache. Will run in folder sync-mode with same tracks as last time:");
+
+                    match serde_json::from_str::<LastRunCache>(&data) {
+                        Ok(last_run_cache) => {
+                            println!("{}", last_run_cache.url.join(", "));
+                            println!("(Tip: Run with flag -r to clear folder sync-mode state or specify a different track via command argument.)\n");
+                            opt.tracks.extend(last_run_cache.url);
+                        }
+                        Err(_) => {
+                            eprintln!("⚠️  Last run cache file corrupted. Erasing: {last_run_cache_path}");
+                            fs::remove_file(last_run_cache_path)?;
+                        }
+                    }
+                }
+            }
+            Err(_) => {}
         }
     }
     Ok(())
