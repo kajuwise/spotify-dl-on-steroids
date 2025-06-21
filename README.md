@@ -36,8 +36,8 @@ OPTIONAL:
                                        five songs simultaneously.
                                        In normal mode, the download speed is limited to mimic
                                        realistic streaming and there is varying delay between downloads.
-    -r, --reset <reset>                Reset last-run-cache. Normally last run can be resumed without
-                                       specifying the track again. (playlist sync mode) 
+    -r, --reset <reset>                Reset last-run-cache. Normally last run can be resumed in the same folder
+                                       without specifying the track again. (playlist sync mode) 
 
 OPTIONAL ARGS:
     <tracks>...    A list of Spotify URIs or URLs (songs, podcasts, playlists or albums). Automatically prompted if not provided.
