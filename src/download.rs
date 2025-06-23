@@ -1,6 +1,6 @@
 use std::fmt::Write;
 use std::path::PathBuf;
-use std::time::Duration;
+use tokio::time::{timeout, Duration};
 
 use anyhow::Result;
 use futures::StreamExt;
@@ -96,13 +96,21 @@ impl Downloader {
         let channel = match stream.stream(track).await {
             Ok(channel) => channel,
             Err(e) => {
-                self.fail_with_error(&pb, &metadata.to_string(), e.to_string());
+                self.fail_with_error(&pb, &file_stem, e.to_string());
                 return Ok(());
             }
         };
 
         let samples = match self.buffer_track(channel, &pb, &metadata).await {
-            Ok(samples) => samples,
+            Ok(Some(samples)) => samples,
+            Ok(None) => {
+                tracing::warn!(
+                    "Skipping {}, song download timed out",
+                    file_stem
+                );
+                pb.finish_with_message(format!("Skipped {}", file_stem));
+                return Ok(());
+            }
             Err(e) => {
                 self.fail_with_error(&pb, &metadata.to_string(), e.to_string());
                 return Ok(());
@@ -160,51 +168,58 @@ impl Downloader {
         mut rx: StreamEventChannel,
         pb: &ProgressBar,
         metadata: &TrackMetadata,
-    ) -> Result<Samples> {
+    ) -> Result<Option<Samples>> {
         let mut samples = Vec::<i32>::new();
-        while let Some(event) = rx.recv().await {
-            match event {
-                StreamEvent::Write {
-                    bytes,
-                    total,
-                    mut content,
-                } => {
-                    tracing::trace!("Written {} bytes out of {}", bytes, total);
-                    pb.set_position(bytes as u64);
-                    samples.append(&mut content);
-                }
-                StreamEvent::Finished => {
-                    tracing::info!("Finished downloading track");
-                    break;
-                }
-                StreamEvent::Error(stream_error) => {
-                    tracing::error!("Error while streaming track: {:?}", stream_error);
-                    return Err(anyhow::anyhow!("Streaming error: {:?}", stream_error));
-                }
-                StreamEvent::Retry {
-                    attempt,
-                    max_attempts,
-                } => {
-                    tracing::warn!(
-                        "Retrying download, attempt {} of {}: {}",
+        let timeout_duration = Duration::from_secs(30);
+        loop {
+            match timeout(timeout_duration, rx.recv()).await {
+                Ok(Some(event)) => match event {
+                    StreamEvent::Write {
+                        bytes,
+                        total,
+                        mut content,
+                    } => {
+                        tracing::trace!("Written {} bytes out of {}", bytes, total);
+                        pb.set_position(bytes as u64);
+                        samples.append(&mut content);
+                    }
+                    StreamEvent::Finished => {
+                        tracing::info!("Finished downloading track");
+                        break;
+                    }
+                    StreamEvent::Error(stream_error) => {
+                        tracing::error!("Error while streaming track: {:?}", stream_error);
+                        return Err(anyhow::anyhow!("Streaming error: {:?}", stream_error));
+                    }
+                    StreamEvent::Retry {
                         attempt,
                         max_attempts,
-                        metadata.to_string()
-                    );
-                    pb.set_message(format!(
-                        "Retrying ({}/{}) {}",
-                        attempt,
-                        max_attempts,
-                        metadata.to_string()
-                    ));
+                    } => {
+                        tracing::warn!(
+                            "Retrying download, attempt {} of {}: {}",
+                            attempt,
+                            max_attempts,
+                            metadata.to_string()
+                        );
+                        pb.set_message(format!(
+                            "Retrying ({}/{}) {}",
+                            attempt,
+                            max_attempts,
+                            metadata.to_string()
+                        ));
+                    }
+                },
+                Ok(None) => break,
+                Err(_) => {
+                    println!("Song download timed out. Skipping.");
+                    return Ok(None);
                 }
             }
         }
-        Ok(Samples {
+        Ok(Some(Samples {
             samples,
             ..Default::default()
-        })
-    
+        }))
     }
 
     fn fail_with_error<S>(&self, pb: &ProgressBar, name: &str, e: S)
