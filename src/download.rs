@@ -1,6 +1,6 @@
 use std::fmt::Write;
 use std::path::PathBuf;
-use std::time::Duration;
+use tokio::time::{timeout, Duration};
 
 use bytes::Bytes;
 use anyhow::Result;
@@ -119,16 +119,26 @@ impl Downloader {
             player.stop();
         });
 
-        while let Some(event) = sink_channel.recv().await {
-            match event {
-                SinkEvent::Write { bytes, total, mut content } => {
-                    tracing::trace!("Written {} bytes out of {}", bytes, total);
-                    pb.set_position(bytes as u64);
-                    samples.append(&mut content);
+        let timeout_duration = Duration::from_secs(30); //handle unavailable songs
+
+        loop {
+            match timeout(timeout_duration, sink_channel.recv()).await {
+                Ok(Some(event)) => {
+                    match event {
+                        SinkEvent::Write { bytes, total, mut content } => {
+                            tracing::trace!("Written {} bytes out of {}", bytes, total);
+                            pb.set_position(bytes as u64);
+                            samples.append(&mut content);
+                        }
+                        SinkEvent::Finished => {
+                            tracing::info!("Finished downloading track: {:?}", file_name);
+                            break;
+                        }
+                    }
                 }
-                SinkEvent::Finished => {
-                    tracing::info!("Finished downloading track: {:?}", file_name);
-                    break;
+                Err(_) | Ok(None) => {
+                    println!("Song download timed out. Skipping.");
+                    return Ok(());
                 }
             }
         }
