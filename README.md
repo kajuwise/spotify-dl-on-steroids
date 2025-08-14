@@ -1,6 +1,6 @@
 # spotify-dl
 
-A command line utility to download songs, podcasts, playlists and albums directly from Spotify's servers.
+Improved command line utility to download songs, podcasts, playlists and albums directly from Spotify's servers.
 You need a Spotify Premium account.
 
 ## Disclaimer
@@ -9,11 +9,19 @@ The usage of this software may infringe Spotify's ToS and/or your local legislat
 
 ## Installation from source
 ```
-git clone https://github.com/GuillemCastro/spotify-dl.git
-cd spotify-dl
+git clone https://github.com/kajuwise/spotify-dl-on-steroids.git
+cd spotify-dl-on-steroids
 cargo build --release
 cargo install --path .
 ```
+
+## Features in this fork
+
+- Playlist sync feature - no need to enter url after first use. Playlist url information is cached in the folder. Just run `spotify-dl` and it will skip already downloaded songs and add only missing ones.
+- Graceful handling of unavailable songs
+- 320kbps mp3
+- Album art and mp3 tags
+- etc.
 
 ## Usage
 
