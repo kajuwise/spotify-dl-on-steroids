@@ -11,7 +11,7 @@ pub enum StreamEvent {
         content: Vec<i32>,
     },
     Finished,
-    Retry{
+    Retry {
         attempt: usize,
         max_attempts: usize,
     },

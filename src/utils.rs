@@ -7,10 +7,15 @@ where
     S: AsRef<str>,
 {
     let invalid_chars = ['<', '>', ':', '\'', '"', '/', '\\', '|', '?', '*'];
+    let allows_non_ascii = !cfg!(windows);
     input
         .as_ref()
         .chars()
-        .filter(|&c| !invalid_chars.contains(&c) && !c.is_control())
+        .filter(|&c| {
+            !invalid_chars.contains(&c)
+                && !c.is_control()
+                && (allows_non_ascii || c.is_ascii())
+        })
         .collect()
 }
 

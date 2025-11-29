@@ -47,31 +47,36 @@ impl Stream {
                 .on_retry(|attempt, _, e| {
                     let error = format!("{}", e);
                     let tx = tx.clone();
+                    let tid = track.id.clone();
                     async move {
                         tracing::warn!(
                             "Attempt {} to load track {:?} failed: {}",
                             attempt,
-                            track.id,
+                            tid,
                             error
                         );
-                        Self::send_event(&tx, StreamEvent::Retry {
-                            attempt: attempt as usize,
-                            max_attempts: 3,
-                        }).await;
+                        Self::send_event(
+                            &tx,
+                            StreamEvent::Retry {
+                                attempt: attempt as usize,
+                                max_attempts: 3,
+                            },
+                        )
+                        .await;
                     }
                 })
                 .exponential_backoff(Duration::from_secs(10))
                 .max_delay(Duration::from_secs(30))
                 .await
             {
-                Ok(_) => tracing::info!("Track loaded successfully: {:?}", track.id),
+                Ok(_) => tracing::info!("Track loaded successfully: {:?}", &track.id),
                 Err(e) => {
-                    tracing::error!("Failed to load track: {:?}, error: {:?}", track.id, e);
+                    tracing::error!("Failed to load track: {:?}, error: {:?}", &track.id, e);
                     Self::send_event(
                         &tx,
                         StreamEvent::Error(StreamError::LoadError(format!(
                             "Failed to load track: {:?}",
-                            track.id
+                            &track.id
                         ))),
                     )
                     .await;
@@ -79,7 +84,7 @@ impl Stream {
                 }
             }
 
-            tracing::info!("Streaming track: {:?}", track.id);
+            tracing::info!("Streaming track: {:?}", &track.id);
 
             while let Some(event) = channel.recv().await {
                 match event {
@@ -110,20 +115,20 @@ impl Stream {
     }
 
     async fn load(player: Arc<Player>, track: &Track) -> Result<()> {
-        player.load(track.id, true, 0);
+        player.load(track.id.clone(), true, 0);
 
-        tracing::info!("Loading track: {:?}", track.id);
+        tracing::info!("Loading track: {:?}", &track.id);
         loop {
             match player.get_player_event_channel().recv().await {
                 Some(PlayerEvent::Playing { .. })
                 | Some(PlayerEvent::TrackChanged { .. })
                 | Some(PlayerEvent::EndOfTrack { .. }) => {
-                    tracing::info!("Player started playing track: {:?}", track.id);
+                    tracing::info!("Player started playing track: {:?}", &track.id);
                     break;
                 }
                 Some(PlayerEvent::Unavailable { .. }) => {
-                    tracing::info!("Track is unavailable: {:?}", track.id);
-                    return Err(anyhow::anyhow!("Could not load track: {:?}", track.id));
+                    tracing::info!("Track is unavailable: {:?}", &track.id);
+                    return Err(anyhow::anyhow!("Could not load track: {:?}", &track.id));
                 }
                 _ => {
                     // Ignore other events

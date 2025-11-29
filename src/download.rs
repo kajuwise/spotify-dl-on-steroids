@@ -72,25 +72,39 @@ impl Downloader {
     async fn download_track(&self, track: Track, options: &DownloadOptions) -> Result<()> {
         let metadata = track.metadata(&self.session).await?;
         tracing::info!("Downloading track: {:?}", metadata.track_name);
-        let file_stem = metadata.to_string();
 
-        let path = options
-            .destination
-            .join(&file_stem)
-            .with_extension(options.format.extension())
+        let file_stem = self.get_file_name(&metadata);
+        let mut target_path = options.destination.join(&file_stem);
+        target_path.set_extension(options.format.extension());
+
+        if !options.force {
+            if target_path.exists() {
+                println!(
+                    "File already exists, skipping: {}",
+                    target_path.display()
+                );
+                return Ok(());
+            }
+
+            if let Some(legacy) = self.legacy_file_name(&metadata) {
+                let mut legacy_path = options.destination.join(&legacy);
+                legacy_path.set_extension(options.format.extension());
+                if legacy_path.exists() {
+                    println!(
+                        "File already exists, skipping: {}",
+                        legacy_path.display()
+                    );
+                    return Ok(());
+                }
+            }
+        }
+
+        let path = target_path
             .to_str()
             .ok_or(anyhow::anyhow!("Could not set the output path"))?
             .to_string();
 
-        if !options.force && PathBuf::from(&path).exists() {
-            tracing::info!(
-                "Skipping {}, file already exists. Use --force to force re-downloading the track",
-                &metadata.track_name
-            );
-            return Ok(());
-        }
-
-        let pb = self.add_progress_bar(&metadata);
+        let pb = self.add_progress_bar(&metadata, &file_stem);
 
         let stream = Stream::new(self.session.clone());
         let channel = match stream.stream(track).await {
@@ -101,18 +115,15 @@ impl Downloader {
             }
         };
 
-        let samples = match self.buffer_track(channel, &pb, &metadata).await {
+        let samples = match self.buffer_track(channel, &pb, &file_stem).await {
             Ok(Some(samples)) => samples,
             Ok(None) => {
-                tracing::warn!(
-                    "Skipping {}, song download timed out",
-                    file_stem
-                );
+                tracing::warn!("Skipping {}, song download timed out", file_stem);
                 pb.finish_with_message(format!("Skipped {}", file_stem));
                 return Ok(());
             }
             Err(e) => {
-                self.fail_with_error(&pb, &metadata.to_string(), e.to_string());
+                self.fail_with_error(&pb, &file_stem, e.to_string());
                 return Ok(());
             }
         };
@@ -124,11 +135,7 @@ impl Downloader {
         let stream = encoder.encode(samples).await?;
 
         pb.set_message(format!("Writing {}", file_stem));
-        tracing::info!(
-            "Writing track: {:?} to file: {}",
-            file_stem,
-            &path
-        );
+        tracing::info!("Writing track: {:?} to file: {}", file_stem, &path);
         stream.write_to_file(&path).await?;
 
         let tags = metadata.tags().await?;
@@ -149,7 +156,7 @@ impl Downloader {
         Ok(())
     }
 
-    fn add_progress_bar(&self, track: &TrackMetadata) -> ProgressBar {
+    fn add_progress_bar(&self, track: &TrackMetadata, label: &str) -> ProgressBar {
         let pb = self
             .progress_bar
             .add(ProgressBar::new(track.approx_size() as u64));
@@ -158,8 +165,8 @@ impl Downloader {
             // Infallible
             .unwrap()
             .with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
-            .progress_chars("#>-"));
-        pb.set_message(track.to_string());
+            .progress_chars("#>-") );
+        pb.set_message(label.to_string());
         pb
     }
 
@@ -167,7 +174,7 @@ impl Downloader {
         &self,
         mut rx: StreamEventChannel,
         pb: &ProgressBar,
-        metadata: &TrackMetadata,
+        label: &str,
     ) -> Result<Option<Samples>> {
         let mut samples = Vec::<i32>::new();
         let timeout_duration = Duration::from_secs(30);
@@ -199,13 +206,13 @@ impl Downloader {
                             "Retrying download, attempt {} of {}: {}",
                             attempt,
                             max_attempts,
-                            metadata.to_string()
+                            label
                         );
                         pb.set_message(format!(
                             "Retrying ({}/{}) {}",
                             attempt,
                             max_attempts,
-                            metadata.to_string()
+                            label
                         ));
                     }
                 },
@@ -227,6 +234,65 @@ impl Downloader {
         S: Into<String>,
     {
         tracing::error!("Failed to download {}: {}", name, e.into());
-        pb.finish_with_message(console::style(format!("Failed! {}", name)).red().to_string());
+        pb.finish_with_message(
+            console::style(format!("Failed! {}", name))
+                .red()
+                .to_string(),
+        );
+    }
+
+    fn get_file_name(&self, metadata: &TrackMetadata) -> String {
+        if metadata.artists.len() > 3 {
+            let artists_name = metadata
+                .artists
+                .iter()
+                .take(3)
+                .map(|artist| artist.name.clone())
+                .collect::<Vec<String>>()
+                .join(", ");
+            return self.clean_file_name(format!(
+                "{}, and others - {}",
+                artists_name, metadata.track_name
+            ));
+        }
+
+        let artists_name = metadata
+            .artists
+            .iter()
+            .map(|artist| artist.name.clone())
+            .collect::<Vec<String>>()
+            .join(", ");
+        self.clean_file_name(format!("{} - {}", artists_name, metadata.track_name))
+    }
+
+    fn legacy_file_name(&self, metadata: &TrackMetadata) -> Option<String> {
+        if metadata.artists.len() > 3 {
+            let artists_name = metadata
+                .artists
+                .iter()
+                .take(3)
+                .map(|artist| artist.name.clone())
+                .collect::<Vec<String>>()
+                .join(", ");
+            return Some(self.clean_file_name(format!(
+                "{}, ... - {}",
+                artists_name, metadata.track_name
+            )));
+        }
+        None
+    }
+
+    fn clean_file_name(&self, file_name: String) -> String {
+        let invalid_chars = ['<', '>', ':', '\'', '"', '/', '\\', '|', '?', '*', '.'];
+        let mut clean = String::new();
+
+        let allows_non_ascii = !cfg!(windows);
+        for c in file_name.chars() {
+            if !invalid_chars.contains(&c) && (c.is_ascii() || allows_non_ascii) && !c.is_control()
+            {
+                clean.push(c);
+            }
+        }
+        clean
     }
 }
