@@ -18,6 +18,10 @@ The usage of this software may infringe Spotify's ToS and/or your local legislat
 - Mimic realistic streaming vs parallelized "turbo" mode
 - etc.
 
+## Latest changes and status
+November 2025 pump to latest librespot version and capabilities.
+Tested 1.12.2025 ✅
+
 ## Installation from source
 ```
 git clone https://github.com/kajuwise/spotify-dl-on-steroids.git
