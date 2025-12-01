@@ -1,85 +1,61 @@
-# 🎵 spotify-dl
+# spotify-dl-on-steroids
 
-A command line utility to download songs, podcasts, playlists and albums directly from Spotify.
+A fork of [spotify-dl](https://github.com/GuillemCastro/spotify-dl)
 
-> [!IMPORTANT]
-> A Spotify Premium account is required.
+Improved command line utility to download songs, podcasts, playlists and albums directly from Spotify's servers.
+You need a Spotify Premium account.
 
-> [!CAUTION]
-> Usage of this software may infringe Spotify's terms of service or your local legislation. Use it under your own risk.
+## Disclaimer
 
-## 🚀 Features
+The usage of this software may infringe Spotify's ToS and/or your local legislation. For educational purposes only. Do not run in production servers.
 
-- Download individual tracks, podcasts, playlists or full albums.
-- Built with Rust for speed and efficiency.
-- Supports metadata tagging and organized file output.
+## Features in this fork
 
-## ⚙️ Installation
+- Playlist sync feature - no need to enter url after first use. Playlist url information is cached in the folder. Just run `spotify-dl` again and it will skip already downloaded songs and add only missing ones.
+- Graceful handling of unavailable songs
+- 320kbps mp3 by default
+- Album art and all available mp3 tags
+- Mimic realistic streaming vs parallelized "turbo" mode
+- etc.
 
-You can install it using `cargo`, `homebrew`, from source or using a pre-built binary from the releases page.
-
-### From crates.io using `cargo`
-
+## Installation from source
 ```
-cargo install spotify-dl
-```
-
-### Using homebrew (macOs)
-
-```
-brew tap guillemcastro/spotify-dl
-brew install spotify-dl
+git clone https://github.com/kajuwise/spotify-dl-on-steroids.git
+cd spotify-dl-on-steroids
+cargo build --release
+cargo install --path .
 ```
 
-### From source
+## Usage
 
 ```
-cargo install --git https://github.com/GuillemCastro/spotify-dl.git
-```
-
-## 🧭 Usage
-
-```
-spotify-dl 0.9.0
+spotify-dl
 A commandline utility to download music directly from Spotify
 
 USAGE:
-    spotify-dl.exe [FLAGS] [OPTIONS] <tracks>...
+    spotify-dl [OPTIONS]
 
 FLAGS:
-    -F, --force      Force download even if the file already exists
     -h, --help       Prints help information
     -V, --version    Prints version information
 
-OPTIONS:
+OPTIONAL:
+    -f, --format <mp3 or flac>         Defining the output format, 320kbps mp3 by default
     -d, --destination <destination>    The directory where the songs will be downloaded
-    -f, --format <format>              The format to download the tracks in. Default is flac. [default: flac]
-    -t, --parallel <parallel>          Number of parallel downloads. Default is 5. [default: 5]
+    -t, --turbo <parallel>             Turbo mode downloads songs in parallel. The number behind option
+                                       defines the number of parallel threads: '-t 5' would download
+                                       five songs simultaneously.
+                                       In normal mode, the download speed is limited to mimic
+                                       realistic streaming and there is varying delay between downloads.
+    -r, --reset <reset>                Reset last-run-cache. Normally last run can be resumed in the same folder
+                                       without specifying the track again. (playlist sync mode) 
 
-ARGS:
-    <tracks>...    A list of Spotify URIs or URLs (songs, podcasts, playlists or albums)
+OPTIONAL ARGS:
+    <tracks>...    A list of Spotify URIs or URLs (songs, podcasts, playlists or albums). Automatically prompted if not provided.
 ```
 
 Songs, playlists and albums must be passed as Spotify URIs or URLs (e.g. `spotify:track:123456789abcdefghABCDEF` for songs and `spotify:playlist:123456789abcdefghABCDEF` for playlists or `https://open.spotify.com/playlist/123456789abcdefghABCDEF?si=1234567890`).
 
-## 📋 Examples
-
-- Download a single track:
-```bash
-spotify-dl https://open.spotify.com/track/TRACK_ID
-```
-
-- Download a playlist:
-
-```
-spotify-dl -u YOUR_USER -p YOUR_PASS https://open.spotify.com/playlist/PLAYLIST_ID
-```
-
-Save as MP3 to a custom folder:
-```
-spotify-dl --format flac --destination ~/Music/Spotify https://open.spotify.com/album/ALBUM_ID
-```
-
-## 📄 License
+## License
 
 spotify-dl is licensed under the MIT license. See [LICENSE](LICENSE).
