@@ -12,6 +12,7 @@ The usage of this software may infringe Spotify's ToS and/or your local legislat
 ## Features in this fork
 
 - Playlist sync feature - no need to enter url after first use. Playlist url information is cached in the folder. Just run `spotify-dl` again and it will skip already downloaded songs and add only missing ones.
+- Store download history in the folder. Skip already downloaded songs in playlist sync mode (not even fetching metadata)
 - Graceful handling of unavailable songs
 - 320kbps mp3 by default
 - Album art and all available mp3 tags
