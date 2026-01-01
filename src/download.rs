@@ -1,5 +1,6 @@
 use std::fmt::Write;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::time::{timeout, Duration};
 
 use anyhow::Result;
@@ -10,10 +11,12 @@ use indicatif::ProgressBar;
 use indicatif::ProgressState;
 use indicatif::ProgressStyle;
 use librespot::core::session::Session;
+use tokio::sync::Mutex;
 
 use crate::encoder;
 use crate::encoder::Format;
 use crate::encoder::Samples;
+use crate::history::PlaylistHistory;
 use crate::stream::Stream;
 use crate::stream::StreamEvent;
 use crate::stream::StreamEventChannel;
@@ -23,6 +26,7 @@ use crate::track::TrackMetadata;
 pub struct Downloader {
     session: Session,
     progress_bar: MultiProgress,
+    history: Option<Arc<Mutex<PlaylistHistory>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -47,10 +51,11 @@ impl DownloadOptions {
 }
 
 impl Downloader {
-    pub fn new(session: Session) -> Self {
+    pub fn new(session: Session, history: Option<Arc<Mutex<PlaylistHistory>>>) -> Self {
         Downloader {
             session,
             progress_bar: MultiProgress::new(),
+            history,
         }
     }
 
@@ -70,6 +75,14 @@ impl Downloader {
 
     #[tracing::instrument(name = "download_track", skip(self))]
     async fn download_track(&self, track: Track, options: &DownloadOptions) -> Result<()> {
+        if !options.force && self.should_skip_track(&track).await {
+            println!(
+                "Skipping track {} - already downloaded from playlist history",
+                track.id
+            );
+            return Ok(());
+        }
+
         let metadata = match track.metadata(&self.session).await {
             Ok(metadata) => metadata,
             Err(err) => {
@@ -90,6 +103,7 @@ impl Downloader {
                     "File already exists, skipping: {}",
                     target_path.display()
                 );
+                self.mark_downloaded(&track).await;
                 return Ok(());
             }
 
@@ -101,6 +115,7 @@ impl Downloader {
                         "File already exists, skipping: {}",
                         legacy_path.display()
                     );
+                    self.mark_downloaded(&track).await;
                     return Ok(());
                 }
             }
@@ -114,7 +129,7 @@ impl Downloader {
         let pb = self.add_progress_bar(&metadata, &file_stem);
 
         let stream = Stream::new(self.session.clone());
-        let channel = match stream.stream(track).await {
+        let channel = match stream.stream(track.clone()).await {
             Ok(channel) => channel,
             Err(e) => {
                 self.fail_with_error(&pb, &file_stem, e.to_string());
@@ -160,6 +175,8 @@ impl Downloader {
         } else {
             pb.finish_with_message(format!("Downloaded {}", file_stem));
         }
+
+        self.mark_downloaded(&track).await;
         Ok(())
     }
 
@@ -230,10 +247,32 @@ impl Downloader {
                 }
             }
         }
+
         Ok(Some(Samples {
             samples,
             ..Default::default()
         }))
+    }
+
+    async fn should_skip_track(&self, track: &Track) -> bool {
+        if let Some(history_handle) = &self.history {
+            if let Some(playlist) = track.playlist() {
+                let history = history_handle.lock().await;
+                return history.has_downloaded(&playlist, &track.id);
+            }
+        }
+        false
+    }
+
+    async fn mark_downloaded(&self, track: &Track) {
+        if let Some(history_handle) = &self.history {
+            if let Some(playlist) = track.playlist() {
+                let mut history = history_handle.lock().await;
+                if let Err(err) = history.record_download(&playlist, &track.id) {
+                    tracing::warn!(error = %err, "Failed to record download history");
+                }
+            }
+        }
     }
 
     fn fail_with_error<S>(&self, pb: &ProgressBar, name: &str, e: S)

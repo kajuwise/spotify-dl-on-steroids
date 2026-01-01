@@ -70,6 +70,7 @@ fn parse_url(track_url: &str) -> Option<SpotifyUri> {
 #[derive(Clone, Debug)]
 pub struct Track {
     pub id: SpotifyUri,
+    playlist: Option<SpotifyUri>,
 }
 
 lazy_static! {
@@ -80,11 +81,28 @@ lazy_static! {
 impl Track {
     pub fn new(track: &str) -> Result<Self> {
         let id = parse_uri_or_url(track).ok_or(anyhow::anyhow!("Invalid track"))?;
-        Ok(Track { id })
+        Ok(Track {
+            id,
+            playlist: None,
+        })
     }
 
     pub fn from_id(id: SpotifyUri) -> Self {
-        Track { id }
+        Track {
+            id,
+            playlist: None,
+        }
+    }
+
+    pub fn from_playlist(track_id: SpotifyUri, playlist_id: SpotifyUri) -> Self {
+        Track {
+            id: track_id,
+            playlist: Some(playlist_id),
+        }
+    }
+
+    pub fn playlist(&self) -> Option<SpotifyUri> {
+        self.playlist.clone()
     }
 
     pub async fn metadata(&self, session: &Session) -> Result<TrackMetadata> {
@@ -195,7 +213,7 @@ impl TrackCollection for Playlist {
             .expect("Failed to get playlist");
         playlist
             .tracks()
-            .map(|track| Track::from_id(track.clone()))
+            .map(|track| Track::from_playlist(track.clone(), self.id.clone()))
             .collect()
     }
 }

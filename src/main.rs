@@ -1,12 +1,15 @@
 use spotify_dl::download::{DownloadOptions, Downloader};
 use spotify_dl::encoder::Format;
+use spotify_dl::history::PlaylistHistory;
 use spotify_dl::log;
 use spotify_dl::session::create_session;
 use spotify_dl::track::get_tracks;
 use std::fs;
 use std::fs::File;
 use std::io::{self, Write};
+use std::sync::Arc;
 use structopt::StructOpt;
+use tokio::sync::Mutex;
 
 mod last_run_cache;
 use last_run_cache::LastRunCache;
@@ -84,14 +87,48 @@ async fn main() -> anyhow::Result<()> {
 
     let session = create_session().await?;
 
-    let track = get_tracks(opt.tracks, &session).await?;
+    let mut tracks = get_tracks(opt.tracks, &session).await?;
+    let download_options = DownloadOptions::new(opt.destination, opt.parallel, opt.format, opt.force);
 
-    let downloader = Downloader::new(session);
+    let history = if tracks.iter().any(|track| track.playlist().is_some()) {
+        let history_path = download_options
+            .destination
+            .join(".spotify-dl-history.json");
+        let history = PlaylistHistory::load(history_path);
+
+        if !download_options.force {
+            let total_before = tracks.len();
+            tracks = tracks
+                .into_iter()
+                .filter(|track| {
+                    if let Some(playlist) = track.playlist() {
+                        if history.has_downloaded(&playlist, &track.id) {
+                            println!(
+                                "Skipping track {} - already downloaded from playlist history",
+                                track.id
+                            );
+                            return false;
+                        }
+                    }
+                    true
+                })
+                .collect();
+
+            let skipped = total_before.saturating_sub(tracks.len());
+            if skipped > 0 {
+                println!(
+                    "Playlist history matched {skipped} tracks. Skipping metadata fetch for them."
+                );
+            }
+        }
+        Some(Arc::new(Mutex::new(history)))
+    } else {
+        None
+    };
+
+    let downloader = Downloader::new(session, history);
     downloader
-        .download_tracks(
-            track,
-            &DownloadOptions::new(opt.destination, opt.parallel, opt.format, opt.force),
-        )
+        .download_tracks(tracks, &download_options)
         .await
 }
 
