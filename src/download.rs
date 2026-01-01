@@ -70,7 +70,14 @@ impl Downloader {
 
     #[tracing::instrument(name = "download_track", skip(self))]
     async fn download_track(&self, track: Track, options: &DownloadOptions) -> Result<()> {
-        let metadata = track.metadata(&self.session).await?;
+        let metadata = match track.metadata(&self.session).await {
+            Ok(metadata) => metadata,
+            Err(err) => {
+                tracing::warn!(error = %err, "Skipping track because metadata could not be loaded");
+                println!("Skipping track {:?}: {}", track.id, err);
+                return Ok(());
+            }
+        };
         tracing::info!("Downloading track: {:?}", metadata.track_name);
 
         let file_stem = self.get_file_name(&metadata);
