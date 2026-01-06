@@ -20,8 +20,9 @@ The usage of this software may infringe Spotify's ToS and/or your local legislat
 - etc.
 
 ## Latest changes and status
+Tested 3.01.2026 ✅
+January 2025 - implement download history feature. Skip already downlaoded files. Speeds up playlist sync feature.
 November 2025 - pump to latest librespot library version and features.
-Tested 1.12.2025 ✅
 
 ## Installation from source
 ```
