@@ -25,11 +25,21 @@ January 2025 - implement download history feature. Skip already downlaoded files
 November 2025 - pump to latest librespot library version and features.<br>
 
 ## Installation from source
+Mac
 ```
 git clone https://github.com/kajuwise/spotify-dl-on-steroids.git
 cd spotify-dl-on-steroids
+```
+Mac
+```
 cargo build --release
 cargo install --path .
+```
+Windows
+```
+cargo update -p vergen --precise 9.0.6
+cargo build --release --locked
+cargo install --path . --locked
 ```
 
 ## Usage
