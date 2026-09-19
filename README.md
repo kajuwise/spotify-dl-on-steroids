@@ -3,7 +3,8 @@
 A fork of [spotify-dl](https://github.com/GuillemCastro/spotify-dl)
 
 Improved command line utility to download songs, podcasts, playlists and albums directly from Spotify's servers.
-You need a Spotify Premium account.
+You need a Spotify Premium account. 
+Tested on Mac and Windows.
 
 ## Disclaimer
 
@@ -25,7 +26,7 @@ January 2025 - implement download history feature. Skip already downlaoded files
 November 2025 - pump to latest librespot library version and features.<br>
 
 ## Installation from source
-Mac
+Clone the repo
 ```
 git clone https://github.com/kajuwise/spotify-dl-on-steroids.git
 cd spotify-dl-on-steroids
@@ -42,6 +43,12 @@ cargo build --release --locked
 cargo install --path . --locked
 ```
 
+In case you are missing Cargo:
+Mac
+```
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
 ## Usage
 
 ```
