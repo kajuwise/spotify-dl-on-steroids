@@ -26,6 +26,11 @@ January 2025 - implement download history feature. Skip already downlaoded files
 November 2025 - pump to latest librespot library version and features.<br>
 
 ## Installation from source
+One liner:
+```
+cargo install --git https://github.com/kajuwise/spotify-dl-on-steroids --locked
+```
+
 Clone the repo
 ```
 git clone https://github.com/kajuwise/spotify-dl-on-steroids.git
