@@ -222,7 +222,9 @@ impl TrackCollection for Playlist {
 pub struct TrackMetadata {
     pub artists: Vec<ArtistMetadata>,
     pub track_name: String,
+    pub track_number: i32,
     pub album: AlbumMetadata,
+    pub album_lenght: u16,
     pub duration: i32,
     image_retriever: AsyncFn<Bytes>,
 }
@@ -234,6 +236,7 @@ impl TrackMetadata {
         album: librespot::metadata::Album,
         image_retriever: AsyncFn<Bytes>,
     ) -> Self {
+        let album_lenght = album.tracks().count() as u16; 
         let artists = artists
             .iter()
             .map(|artist| ArtistMetadata::from(artist.clone()))
@@ -243,7 +246,9 @@ impl TrackMetadata {
         TrackMetadata {
             artists,
             track_name: track.name.clone(),
+            track_number: track.number.clone(),
             album,
+            album_lenght,
             duration: track.duration,
             image_retriever,
         }
@@ -261,8 +266,10 @@ impl TrackMetadata {
     pub async fn tags(&self) -> Result<Tags> {
         let tags = Tags {
             title: self.track_name.clone(),
+            track: self.track_number.clone(),
             artists: self.artists.iter().map(|a| a.name.clone()).collect(),
             album_title: self.album.name.clone(),
+            album_lenght: self.album_lenght.clone(),
             album_cover: (self.image_retriever)().await,
         };
         Ok(tags)
