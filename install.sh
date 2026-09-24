@@ -1,2 +1,2 @@
 cargo build --release
-cargo install --path .
+cargo install --path . --locked

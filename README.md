@@ -21,7 +21,7 @@ The usage of this software may infringe Spotify's ToS and/or your local legislat
 - etc.
 
 ## Latest changes and status
-Tested 3.01.2026 ✅<br>
+Tested 15.09.2026 (win), 24.09.2026 (mac) ✅<br>
 January 2025 - implement download history feature. Skip already downlaoded files. Speeds up playlist sync feature.<br>
 November 2025 - pump to latest librespot library version and features.<br>
 
@@ -34,7 +34,7 @@ cd spotify-dl-on-steroids
 Mac
 ```
 cargo build --release
-cargo install --path .
+cargo install --path . --locked
 ```
 Windows
 ```
