@@ -1,3 +1,4 @@
+use librespot::core::session::Session;
 use spotify_dl::download::{DownloadOptions, Downloader};
 use spotify_dl::encoder::Format;
 use spotify_dl::history::PlaylistHistory;
@@ -11,8 +12,9 @@ use std::sync::Arc;
 use structopt::StructOpt;
 use tokio::sync::Mutex;
 
+mod deep;
 mod last_run_cache;
-use last_run_cache::LastRunCache;
+use last_run_cache::{LAST_RUN_CACHE_PATH, LastRunCache};
 
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -20,6 +22,12 @@ use last_run_cache::LastRunCache;
     about = "A commandline utility to download music directly from Spotify"
 )]
 struct Opt {
+    #[structopt(
+        short = "s",
+        help = "Preview and sync this folder and all subfolders; remember this mode after confirmation",
+        conflicts_with_all = &["tracks", "destination", "reset"]
+    )]
+    subfolders: bool,
     #[structopt(help = "A list of Spotify URIs or URLs (songs, podcasts, playlists or albums)")]
     tracks: Vec<String>,
     #[structopt(
@@ -43,7 +51,11 @@ struct Opt {
         default_value = "mp3"
     )]
     format: Format,
-    #[structopt(short, long, help = "Reset last run cache")]
+    #[structopt(
+        short,
+        long,
+        help = "Reset saved URLs and remembered subfolder mode in this folder"
+    )]
     reset: bool,
     #[structopt(
         short = "F",
@@ -52,6 +64,17 @@ struct Opt {
     )]
     force: bool,
 }
+
+impl Opt {
+    fn uses_subfolders(&self, root: &std::path::Path) -> anyhow::Result<bool> {
+        Ok(self.subfolders
+            || (!self.reset
+                && self.tracks.is_empty()
+                && self.destination.is_none()
+                && deep::is_enabled(root)?))
+    }
+}
+
 pub fn create_destination_if_required(destination: Option<String>) -> anyhow::Result<()> {
     if let Some(destination) = destination {
         if !std::path::Path::new(&destination).exists() {
@@ -63,14 +86,18 @@ pub fn create_destination_if_required(destination: Option<String>) -> anyhow::Re
 }
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    log::configure_logger()?;
-
     let mut opt = Opt::from_args();
+    let root = std::env::current_dir()?;
+    if opt.uses_subfolders(&root)? {
+        return sync_subfolders(&opt).await;
+    }
+    log::configure_logger()?;
     create_destination_if_required(opt.destination.clone())?;
 
-    let last_run_cache_path = ".last_run_cache.dl";
+    let last_run_cache_path = LAST_RUN_CACHE_PATH;
 
     if opt.reset {
+        deep::clear_preference(&root)?;
         match fs::remove_file(last_run_cache_path) {
             Ok(_) => println!(
                 "Reset mode! Erased last run cache file: {}",
@@ -87,8 +114,52 @@ async fn main() -> anyhow::Result<()> {
 
     let session = create_session().await?;
 
-    let mut tracks = get_tracks(opt.tracks, &session).await?;
-    let download_options = DownloadOptions::new(opt.destination, opt.parallel, opt.format, opt.force);
+    let download_options =
+        DownloadOptions::new(opt.destination, opt.parallel, opt.format, opt.force);
+    download_folder(opt.tracks, session, download_options).await
+}
+
+async fn sync_subfolders(opt: &Opt) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        opt.parallel > 0,
+        "Turbo parallelism must be greater than zero"
+    );
+    let scan = deep::scan(&std::env::current_dir()?)?;
+    let confirmed = {
+        let stdin = io::stdin();
+        let stdout = io::stdout();
+        scan.confirm(&mut stdin.lock(), &mut stdout.lock())?
+    };
+    if !confirmed {
+        return Ok(());
+    }
+
+    if opt.subfolders {
+        deep::remember(&std::env::current_dir()?)?;
+        println!("Subfolder mode saved. Next time, run spotify-dl here without -s.");
+    }
+    log::configure_logger()?;
+    let session = create_session().await?;
+    let summary = deep::run_batch(scan.jobs(), &mut io::stdout(), |job| {
+        let options = DownloadOptions {
+            destination: job.path,
+            parallel: opt.parallel,
+            format: opt.format,
+            force: opt.force,
+        };
+        download_folder(job.urls, session.clone(), options)
+    })
+    .await?;
+    summary.print(scan.skipped_count(), &mut io::stdout())?;
+    summary.into_result()
+}
+
+async fn download_folder(
+    urls: Vec<String>,
+    session: Session,
+    download_options: DownloadOptions,
+) -> anyhow::Result<()> {
+    let mut tracks = get_tracks(urls, &session).await?;
 
     let history = if tracks.iter().any(|track| track.playlist().is_some()) {
         let history_path = download_options
@@ -127,9 +198,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let downloader = Downloader::new(session, history);
-    downloader
-        .download_tracks(tracks, &download_options)
-        .await
+    downloader.download_tracks(tracks, &download_options).await
 }
 
 fn store_last_run_cache(opt: &Opt, last_run_cache_path: &str) -> anyhow::Result<()> {
@@ -190,5 +259,50 @@ fn prompt_track_if_necessary(opt: &mut Opt) {
             std::process::exit(1);
         }
         opt.tracks.push(input.to_string());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ordinary_saved_urls_and_explicit_options_keep_single_folder_behavior() {
+        let root = std::env::temp_dir().join(format!("spotify-dl-ordinary-{}", std::process::id()));
+        fs::create_dir(&root).unwrap();
+        let result = (|| -> anyhow::Result<()> {
+            let cache_path = root.join(LAST_RUN_CACHE_PATH);
+            let cache_path = cache_path.to_str().unwrap();
+            let saved =
+                Opt::from_iter_safe(["spotify-dl", "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M"])?;
+            store_last_run_cache(&saved, cache_path)?;
+
+            let mut plain = Opt::from_iter_safe(["spotify-dl"])?;
+            assert!(!plain.uses_subfolders(&root)?);
+            use_last_run_cache_if_applicable(&mut plain, cache_path)?;
+            assert_eq!(plain.tracks, saved.tracks);
+
+            deep::remember(&root)?;
+            assert!(Opt::from_iter_safe(["spotify-dl"])?.uses_subfolders(&root)?);
+            for args in [
+                vec!["spotify-dl", "-r"],
+                vec!["spotify-dl", "-d", "out"],
+                vec!["spotify-dl", "spotify:track:4uLU6hMCjMI75M1A2tKUQC"],
+            ] {
+                let mut opt = Opt::from_iter_safe(args)?;
+                assert!(!opt.uses_subfolders(&root)?);
+                let previous = opt.tracks.clone();
+                use_last_run_cache_if_applicable(&mut opt, cache_path)?;
+                if opt.reset || !previous.is_empty() {
+                    assert_eq!(opt.tracks, previous);
+                } else {
+                    assert_eq!(opt.tracks, saved.tracks);
+                }
+                assert!(deep::is_enabled(&root)?);
+            }
+            Ok(())
+        })();
+        fs::remove_dir_all(root).unwrap();
+        result.unwrap();
     }
 }
